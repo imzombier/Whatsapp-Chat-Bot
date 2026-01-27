@@ -9,38 +9,38 @@ import qrcode from 'qrcode-terminal';
 import express from 'express';
 
 // ================== CONFIG ==================
-const ADMIN_NUMBER = '918096091809@s.whatsapp.net'; // change if needed
-const userLeads = {}; // temp in-memory storage
+const ADMIN_NUMBER = '918096091809@s.whatsapp.net';
+const userLeads = {};
 
-// ================== KEEP ALIVE SERVER ==================
+// ================== KEEP-ALIVE SERVER (RENDER) ==================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-  res.send('GK TECH SOLUTIONS WhatsApp Bot is running 🚀');
+  res.send('GK Tech Solutions WhatsApp Bot is running 🚀');
 });
 
 app.listen(PORT, () => {
   console.log(`🌐 Keep-alive server running on port ${PORT}`);
 });
 
-// ================== BOT FUNCTION ==================
+// ================== BOT START ==================
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
   const sock = makeWASocket({
-  logger: P({ level: 'silent' }),
-  auth: state,
-  printQRInTerminal: true
-});
-
+    logger: P({ level: 'silent' }),
+    auth: state
+  });
 
   sock.ev.on('creds.update', saveCreds);
 
-  // ================== CONNECTION ==================
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+  // ================== CONNECTION UPDATE ==================
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
     if (qr) {
-      console.log('📱 Scan QR Code below:');
+      console.log('📱 Scan this QR Code to connect WhatsApp:');
       qrcode.generate(qr, { small: true });
     }
 
@@ -54,7 +54,7 @@ async function startBot() {
         console.log('🔄 Reconnecting...');
         startBot();
       } else {
-        console.log('❌ Logged out. Please scan QR again.');
+        console.log('❌ Logged out. Scan QR again.');
       }
     }
   });
@@ -75,87 +75,79 @@ async function startBot() {
       '';
     const messageText = text.toLowerCase().trim();
 
-    // ================== MAIN MENU ==================
+    // -------- MAIN MENU --------
     if (['hi', 'hello', 'start', 'menu', '5'].includes(messageText)) {
       await sock.sendMessage(sender, {
         text:
 `👋 *Welcome to GK TECH SOLUTIONS*
 
-🚀 We provide *Automated Chat Bots* & *Professional Websites* to help businesses grow through smart automation.
+🚀 We provide *Automated Chat Bots* & *Professional Websites* to help businesses grow.
 
-👉 Please choose an option below:
+👉 Choose an option:
 
-*1️⃣  Our Services*  
-*2️⃣  Pricing*  
-*3️⃣  Contact & Support*  
-*4️⃣  Get Your Custom Bot*`
+*1️⃣ Our Services*
+*2️⃣ Pricing*
+*3️⃣ Contact & Support*
+*4️⃣ Get Your Custom Bot*`
       });
       return;
     }
 
-    // ================== SERVICES ==================
+    // -------- SERVICES --------
     if (messageText === '1' || messageText === 'services') {
       await sock.sendMessage(sender, {
         text:
 `🛠️ *Our Services*
 
-🤖 Automated Chat Bots  
-🌐 Business Websites  
-📈 Lead & Business Automation  
-🛠️ Setup & 24/7 Support  
+🤖 Automated Chat Bots
+🌐 Business Websites
+📈 Business Automation
+🛠️ Setup & Support
 
-_Type *4* to get your custom bot._  
-_Type *5* to return to menu._`
+_Type *5* for menu._`
       });
       return;
     }
 
-    // ================== PRICING ==================
-    if (messageText === '2' || messageText === 'price' || messageText === 'pricing') {
+    // -------- PRICING --------
+    if (['2', 'price', 'pricing'].includes(messageText)) {
       await sock.sendMessage(sender, {
         text:
 `💰 *Pricing*
 
-✅ Starting from *₹999*  
-• Depends on features & customization  
+Starting from *₹999*
+(Depends on requirements)
 
-_Type *4* to request a quote._  
-_Type *5* to return to menu._`
+_Type *4* to get a quote._
+_Type *5* for menu._`
       });
       return;
     }
 
-    // ================== CONTACT ==================
-    if (messageText === '3' || messageText === 'contact' || messageText === 'support') {
+    // -------- CONTACT --------
+    if (['3', 'contact', 'support'].includes(messageText)) {
       await sock.sendMessage(sender, {
         text:
 `📞 *Contact & Support*
 
-🕒 Available 24/7  
-📱 +91-8096091809  
+📱 +91-8096091809
+🕒 24/7 Support
 
-_Type *4* to get started._  
-_Type *5* to return to menu._`
+_Type *5* for menu._`
       });
       return;
     }
 
-    // ================== LEAD START ==================
-    if (messageText === '4' || messageText.includes('custom bot')) {
+    // -------- LEAD START --------
+    if (messageText === '4') {
       userLeads[sender] = { step: 1 };
-
       await sock.sendMessage(sender, {
-        text:
-`🚀 *Get Your Custom Bot*
-
-Let’s build the right solution for your business.
-
-📝 Please enter your *Full Name*:`
+        text: `📝 Please enter your *Full Name*:`
       });
       return;
     }
 
-    // ================== LEAD FLOW ==================
+    // -------- LEAD FLOW --------
     if (userLeads[sender]) {
       const lead = userLeads[sender];
 
@@ -163,7 +155,7 @@ Let’s build the right solution for your business.
         lead.name = text;
         lead.step = 2;
         await sock.sendMessage(sender, {
-          text: `🏢 Thanks, *${lead.name}*.\n\nPlease enter your *Business Type*:`
+          text: `🏢 Enter your *Business Type*:`
         });
         return;
       }
@@ -172,7 +164,7 @@ Let’s build the right solution for your business.
         lead.business = text;
         lead.step = 3;
         await sock.sendMessage(sender, {
-          text: `📋 Please describe your *Requirement* (Bot / Website / Both):`
+          text: `📋 Describe your *Requirement* (Bot / Website / Both):`
         });
         return;
       }
@@ -181,7 +173,7 @@ Let’s build the right solution for your business.
         lead.requirement = text;
         lead.step = 4;
         await sock.sendMessage(sender, {
-          text: `📞 Please share your *Contact Number*:`
+          text: `📞 Share your *Contact Number*:`
         });
         return;
       }
@@ -190,7 +182,7 @@ Let’s build the right solution for your business.
         lead.phone = text;
 
         const adminMsg =
-`📥 *NEW LEAD RECEIVED*
+`📥 *NEW LEAD*
 
 👤 Name: ${lead.name}
 🏢 Business: ${lead.business}
@@ -205,12 +197,10 @@ Let’s build the right solution for your business.
           text:
 `✅ *Thank you, ${lead.name}!*
 
-Your request has been submitted successfully.
 Our team will contact you shortly.
 
 *- GK TECH SOLUTIONS*
-
-_Type *5* to return to the main menu._`
+_Type *5* for menu._`
         });
 
         delete userLeads[sender];
@@ -218,9 +208,9 @@ _Type *5* to return to the main menu._`
       }
     }
 
-    // ================== FALLBACK ==================
+    // -------- FALLBACK --------
     await sock.sendMessage(sender, {
-      text: `❓ Invalid option.\n\nType *5* to return to the main menu.`
+      text: `❓ Invalid option.\nType *5* for menu.`
     });
   });
 }
