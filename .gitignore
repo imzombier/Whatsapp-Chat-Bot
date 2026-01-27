@@ -1,0 +1,9 @@
+# Node
+node_modules/
+
+# Baileys Auth
+auth_info/
+*.json
+
+# Logs
+*.log
