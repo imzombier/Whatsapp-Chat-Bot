@@ -11,25 +11,24 @@ import QRCode from 'qrcode';
 // ================== CONFIG ==================
 const ADMIN_NUMBER = '918096091809@s.whatsapp.net';
 const userLeads = {};
-let latestQR = null; // store QR in memory
+let latestQR = null;
+let sock = null; // IMPORTANT: single socket
 
 // ================== EXPRESS SERVER ==================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Home page
 app.get('/', (req, res) => {
   res.send(`
     <h2>GK Tech Solutions WhatsApp Bot</h2>
-    <p>Bot status: Running 🚀</p>
-    <p><a href="/qr">Click here to get WhatsApp QR</a></p>
+    <p>Status: Running 🚀</p>
+    <p><a href="/qr">Open WhatsApp QR</a></p>
   `);
 });
 
-// QR page
 app.get('/qr', async (req, res) => {
   if (!latestQR) {
-    return res.send('<h3>No QR available yet. Please refresh in 5 seconds.</h3>');
+    return res.send('<h3>No QR available yet. Refresh in 5 seconds.</h3>');
   }
 
   const qrImage = await QRCode.toDataURL(latestQR);
@@ -47,41 +46,45 @@ app.listen(PORT, () => {
 
 // ================== BOT ==================
 async function startBot() {
+  if (sock) return; // 🚨 PREVENT MULTIPLE SOCKETS
+
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
-  const sock = makeWASocket({
+  sock = makeWASocket({
     logger: P({ level: 'silent' }),
-    auth: state
+    auth: state,
+    browser: ['GK Tech Bot', 'Chrome', '1.0.0']
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  // ===== CONNECTION UPDATE =====
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      latestQR = qr; // save QR for web
-      console.log('📸 New QR generated (available on /qr)');
+      latestQR = qr;
+      console.log('📸 QR generated → available at /qr');
     }
 
     if (connection === 'open') {
       console.log('✅ GK TECH SOLUTIONS Bot Connected');
-      latestQR = null; // clear QR after login
+      latestQR = null;
     }
 
     if (connection === 'close') {
-      const reason = lastDisconnect?.error?.output?.statusCode;
-      if (reason !== DisconnectReason.loggedOut) {
-        console.log('🔄 Reconnecting...');
-        startBot();
-      } else {
+      const code = lastDisconnect?.error?.output?.statusCode;
+
+      if (code === DisconnectReason.loggedOut) {
         console.log('❌ Logged out. New QR will be generated.');
+        latestQR = null;
+        sock = null;
+        startBot(); // SAFE restart
+      } else {
+        console.log('⚠️ Connection lost. Waiting…');
+        sock = null;
+        startBot();
       }
     }
   });
 
-  // ===== MESSAGE HANDLER =====
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
@@ -95,6 +98,7 @@ async function startBot() {
       msg.message.conversation ||
       msg.message.extendedTextMessage?.text ||
       '';
+
     const messageText = text.toLowerCase().trim();
 
     if (['hi', 'hello', 'menu', 'start', '5'].includes(messageText)) {
@@ -149,7 +153,6 @@ Phone: ${lead.phone}`
         });
 
         delete userLeads[sender];
-        return;
       }
     }
   });
