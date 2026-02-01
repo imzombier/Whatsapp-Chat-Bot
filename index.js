@@ -1,6 +1,6 @@
 // ================== IMPORTS ==================
 import {
-  default as makeWASocket,
+  makeWASocket,
   useMultiFileAuthState,
   DisconnectReason
 } from '@whiskeysockets/baileys';
@@ -23,7 +23,7 @@ app.get('/', (req, res) => {
   res.send(`
     <h2>GK Tech Solutions WhatsApp Bot</h2>
     <p>Status: Running 🚀</p>
-    <p><a href="/qr">Open WhatsApp QR</a></p>
+    <a href="/qr">Open WhatsApp QR</a>
   `);
 });
 
@@ -34,7 +34,7 @@ app.get('/qr', async (req, res) => {
 
   const qrImage = await QRCode.toDataURL(latestQR);
   res.send(`
-    <h3>Scan this QR with WhatsApp</h3>
+    <h3>Scan this QR</h3>
     <img src="${qrImage}" />
     <p>WhatsApp → Linked Devices → Scan</p>
   `);
@@ -51,8 +51,8 @@ async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
   sock = makeWASocket({
-    logger: P({ level: 'silent' }),
     auth: state,
+    logger: P({ level: 'silent' }),
     browser: ['GK Tech Bot', 'Chrome', '1.0.0']
   });
 
@@ -61,25 +61,25 @@ async function startBot() {
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       latestQR = qr;
-      console.log('📸 QR generated → open /qr');
+      console.log('📸 QR generated → http://YOUR_VPS_IP:3000/qr');
     }
 
     if (connection === 'open') {
-      console.log('✅ GK TECH SOLUTIONS Bot Connected');
+      console.log('✅ WhatsApp Connected');
       latestQR = null;
     }
 
     if (connection === 'close') {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+
       sock = null;
-      const code = lastDisconnect?.error?.output?.statusCode;
-
-      if (code === DisconnectReason.loggedOut) {
-        console.log('❌ Logged out. Waiting for new QR...');
+      if (reason !== DisconnectReason.loggedOut) {
+        console.log('🔄 Reconnecting...');
+        startBot();
       } else {
-        console.log('⚠️ Connection lost. Reconnecting...');
+        console.log('❌ Logged out. New QR required.');
+        startBot();
       }
-
-      setTimeout(startBot, 3000);
     }
   });
 
@@ -99,22 +99,20 @@ async function startBot() {
 
     const messageText = text.toLowerCase().trim();
 
-    if (['hi', 'hello', 'menu', 'start', '5'].includes(messageText)) {
+    if (['hi', 'hello', 'menu', 'start'].includes(messageText)) {
       await sock.sendMessage(sender, {
-        text:
-`👋 *Welcome to GK TECH SOLUTIONS*
+        text: `👋 *Welcome to GK TECH SOLUTIONS*
 
-1️⃣ Services
-2️⃣ Pricing
-3️⃣ Contact
+1️⃣ Services  
+2️⃣ Pricing  
+3️⃣ Contact  
 4️⃣ Get Custom Bot`
       });
-      return;
     }
 
     if (messageText === '4') {
       userLeads[sender] = { step: 1 };
-      await sock.sendMessage(sender, { text: '📝 Enter your Full Name:' });
+      await sock.sendMessage(sender, { text: '📝 Your Full Name?' });
       return;
     }
 
@@ -139,16 +137,14 @@ async function startBot() {
         lead.phone = text;
 
         await sock.sendMessage(ADMIN_NUMBER, {
-          text:
-`📥 NEW LEAD
-
-👤 Name: ${lead.name}
-🏢 Business: ${lead.business}
-📞 Phone: ${lead.phone}`
+          text: `📥 NEW LEAD
+Name: ${lead.name}
+Business: ${lead.business}
+Phone: ${lead.phone}`
         });
 
         await sock.sendMessage(sender, {
-          text: '✅ Thank you! Our team will contact you shortly.'
+          text: '✅ Thank you! Our team will contact you.'
         });
 
         delete userLeads[sender];
