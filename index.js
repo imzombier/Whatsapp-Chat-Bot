@@ -1,10 +1,9 @@
 // ================== IMPORTS ==================
-import baileys from '@whiskeysockets/baileys';
-const {
-  makeWASocket,
+import {
+  default as makeWASocket,
   useMultiFileAuthState,
   DisconnectReason
-} = baileys;
+} from '@whiskeysockets/baileys';
 
 import P from 'pino';
 import express from 'express';
@@ -14,7 +13,7 @@ import QRCode from 'qrcode';
 const ADMIN_NUMBER = '918096091809@s.whatsapp.net';
 const userLeads = {};
 let latestQR = null;
-let sock = null; // single socket instance
+let sock = null;
 
 // ================== EXPRESS SERVER ==================
 const app = express();
@@ -38,7 +37,6 @@ app.get('/qr', async (req, res) => {
     <h3>Scan this QR with WhatsApp</h3>
     <img src="${qrImage}" />
     <p>WhatsApp → Linked Devices → Scan</p>
-    <p>Refresh if QR expires</p>
   `);
 });
 
@@ -48,7 +46,7 @@ app.listen(PORT, () => {
 
 // ================== BOT ==================
 async function startBot() {
-  if (sock) return; // prevent multiple instances
+  if (sock) return;
 
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
@@ -60,10 +58,7 @@ async function startBot() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  // ===== CONNECTION HANDLER =====
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       latestQR = qr;
       console.log('📸 QR generated → open /qr');
@@ -75,21 +70,19 @@ async function startBot() {
     }
 
     if (connection === 'close') {
-      const reason = lastDisconnect?.error?.output?.statusCode;
-
       sock = null;
+      const code = lastDisconnect?.error?.output?.statusCode;
 
-      if (reason === DisconnectReason.loggedOut) {
-        console.log('❌ Logged out. Generating new QR…');
+      if (code === DisconnectReason.loggedOut) {
+        console.log('❌ Logged out. Waiting for new QR...');
       } else {
-        console.log('⚠️ Connection lost. Reconnecting…');
+        console.log('⚠️ Connection lost. Reconnecting...');
       }
 
       setTimeout(startBot, 3000);
     }
   });
 
-  // ===== MESSAGE HANDLER =====
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
@@ -106,7 +99,6 @@ async function startBot() {
 
     const messageText = text.toLowerCase().trim();
 
-    // MAIN MENU
     if (['hi', 'hello', 'menu', 'start', '5'].includes(messageText)) {
       await sock.sendMessage(sender, {
         text:
@@ -120,14 +112,12 @@ async function startBot() {
       return;
     }
 
-    // START LEAD FLOW
     if (messageText === '4') {
       userLeads[sender] = { step: 1 };
       await sock.sendMessage(sender, { text: '📝 Enter your Full Name:' });
       return;
     }
 
-    // LEAD STEPS
     if (userLeads[sender]) {
       const lead = userLeads[sender];
 
@@ -154,8 +144,7 @@ async function startBot() {
 
 👤 Name: ${lead.name}
 🏢 Business: ${lead.business}
-📞 Phone: ${lead.phone}
-📱 WhatsApp: ${sender.replace('@s.whatsapp.net', '')}`
+📞 Phone: ${lead.phone}`
         });
 
         await sock.sendMessage(sender, {
