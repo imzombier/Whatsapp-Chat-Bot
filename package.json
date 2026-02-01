@@ -2,16 +2,11 @@
   "name": "gk-tech-whatsapp-bot",
   "version": "1.0.0",
   "type": "module",
-  "description": "GK Tech Solutions WhatsApp Automation Bot",
-  "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.0",
+    "@whiskeysockets/baileys": "^6.17.16",
     "express": "^4.19.2",
     "pino": "^8.17.0",
     "qrcode": "^1.5.4"
