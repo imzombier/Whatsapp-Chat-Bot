@@ -12,31 +12,33 @@ import QRCode from 'qrcode';
 // ================== CONFIG ==================
 const ADMIN_NUMBER = '918096091809@s.whatsapp.net';
 const userLeads = {};
+
 let latestQR = null;
-let sock = null;
+let sock = null; // 🔒 single socket only
 
 // ================== EXPRESS SERVER ==================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.send(`
     <h2>GK Tech Solutions WhatsApp Bot</h2>
     <p>Status: Running 🚀</p>
-    <a href="/qr">Open WhatsApp QR</a>
+    <p><a href="/qr">Open WhatsApp QR</a></p>
   `);
 });
 
-app.get('/qr', async (req, res) => {
+app.get('/qr', async (_req, res) => {
   if (!latestQR) {
     return res.send('<h3>No QR available yet. Refresh in 5 seconds.</h3>');
   }
 
   const qrImage = await QRCode.toDataURL(latestQR);
   res.send(`
-    <h3>Scan this QR</h3>
+    <h3>Scan this QR with WhatsApp</h3>
     <img src="${qrImage}" />
     <p>WhatsApp → Linked Devices → Scan</p>
+    <p>Refresh if QR expires</p>
   `);
 });
 
@@ -46,7 +48,7 @@ app.listen(PORT, () => {
 
 // ================== BOT ==================
 async function startBot() {
-  if (sock) return;
+  if (sock) return; // 🚫 prevent multiple instances
 
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
@@ -58,10 +60,11 @@ async function startBot() {
 
   sock.ev.on('creds.update', saveCreds);
 
+  // ===== CONNECTION =====
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       latestQR = qr;
-      console.log('📸 QR generated → http://YOUR_VPS_IP:3000/qr');
+      console.log('📸 QR generated → open /qr');
     }
 
     if (connection === 'open') {
@@ -71,18 +74,19 @@ async function startBot() {
 
     if (connection === 'close') {
       const reason = lastDisconnect?.error?.output?.statusCode;
-
       sock = null;
-      if (reason !== DisconnectReason.loggedOut) {
-        console.log('🔄 Reconnecting...');
-        startBot();
-      } else {
+
+      if (reason === DisconnectReason.loggedOut) {
         console.log('❌ Logged out. New QR required.');
-        startBot();
+      } else {
+        console.log('🔄 Connection lost. Reconnecting...');
       }
+
+      setTimeout(startBot, 3000); // safe retry
     }
   });
 
+  // ===== MESSAGE HANDLER =====
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
@@ -99,56 +103,60 @@ async function startBot() {
 
     const messageText = text.toLowerCase().trim();
 
+    // ===== MENU =====
     if (['hi', 'hello', 'menu', 'start'].includes(messageText)) {
       await sock.sendMessage(sender, {
-        text: `👋 *Welcome to GK TECH SOLUTIONS*
+        text:
+`👋 *Welcome to GK TECH SOLUTIONS*
 
-1️⃣ Services  
-2️⃣ Pricing  
-3️⃣ Contact  
+1️⃣ Services
+2️⃣ Pricing
+3️⃣ Contact
 4️⃣ Get Custom Bot`
       });
-    }
-
-    if (messageText === '4') {
-      userLeads[sender] = { step: 1 };
-      await sock.sendMessage(sender, { text: '📝 Your Full Name?' });
       return;
     }
 
-    if (userLeads[sender]) {
-      const lead = userLeads[sender];
+    // ===== LEAD FLOW =====
+    if (messageText === '4') {
+      userLeads[sender] = { step: 1 };
+      await sock.sendMessage(sender, { text: '📝 Enter your Full Name:' });
+      return;
+    }
 
-      if (lead.step === 1) {
-        lead.name = text;
-        lead.step = 2;
-        await sock.sendMessage(sender, { text: '🏢 Business Type?' });
-        return;
-      }
+    if (!userLeads[sender]) return;
+    const lead = userLeads[sender];
 
-      if (lead.step === 2) {
-        lead.business = text;
-        lead.step = 3;
-        await sock.sendMessage(sender, { text: '📞 Contact Number?' });
-        return;
-      }
+    if (lead.step === 1) {
+      lead.name = text;
+      lead.step = 2;
+      await sock.sendMessage(sender, { text: '🏢 Business Type?' });
+      return;
+    }
 
-      if (lead.step === 3) {
-        lead.phone = text;
+    if (lead.step === 2) {
+      lead.business = text;
+      lead.step = 3;
+      await sock.sendMessage(sender, { text: '📞 Contact Number?' });
+      return;
+    }
 
-        await sock.sendMessage(ADMIN_NUMBER, {
-          text: `📥 NEW LEAD
+    if (lead.step === 3) {
+      lead.phone = text;
+
+      await sock.sendMessage(ADMIN_NUMBER, {
+        text:
+`📥 NEW LEAD
 Name: ${lead.name}
 Business: ${lead.business}
 Phone: ${lead.phone}`
-        });
+      });
 
-        await sock.sendMessage(sender, {
-          text: '✅ Thank you! Our team will contact you.'
-        });
+      await sock.sendMessage(sender, {
+        text: '✅ Thank you! Our team will contact you shortly.'
+      });
 
-        delete userLeads[sender];
-      }
+      delete userLeads[sender];
     }
   });
 }
