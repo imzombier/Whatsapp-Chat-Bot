@@ -33,7 +33,7 @@ app.get('/qr', async (req, res) => {
 
   const qrImage = await QRCode.toDataURL(latestQR);
   res.send(`
-    <h3>Scan this QR with WhatsApp</h3>
+    <h3>Scan this QR</h3>
     <img src="${qrImage}" />
     <p>WhatsApp → Linked Devices → Scan</p>
   `);
@@ -45,7 +45,7 @@ app.listen(PORT, () => {
 
 // ================== BOT ==================
 async function startBot() {
-  if (sock) return; // prevent multiple sessions
+  if (sock) return;
 
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
@@ -76,7 +76,7 @@ async function startBot() {
         console.log('🔄 Reconnecting...');
         startBot();
       } else {
-        console.log('❌ Logged out. New QR required.');
+        console.log('❌ Logged out. Scan QR again.');
         startBot();
       }
     }
@@ -102,9 +102,9 @@ async function startBot() {
       await sock.sendMessage(sender, {
         text: `👋 *Welcome to GK TECH SOLUTIONS*
 
-1️⃣ Services
-2️⃣ Pricing
-3️⃣ Contact
+1️⃣ Services  
+2️⃣ Pricing  
+3️⃣ Contact  
 4️⃣ Get Custom Bot`
       });
       return;
